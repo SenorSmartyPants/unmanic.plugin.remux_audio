@@ -1,6 +1,5 @@
-# Remux file if AC3 audio codec is present in file that is not MKV
 
-plugin for [Unmanic](https://github.com/Unmanic)
+Remux file if AC3 audio codec is present in file that is not MKV.
 
 ---
 
