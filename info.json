@@ -4,10 +4,10 @@
         1,
         2
     ],
-    "description": "Remux to MKV if AC3 audio present.",
+    "description": "Remux if certain audio codecs are present.",
     "icon": "https://raw.githubusercontent.com/SenorSmartyPants/unmanic.plugin.remux_audio/main/icon.png",
     "id": "remux_audio",
-    "name": "Remux AC3 to MKV",
+    "name": "Remux based on Audio",
     "platform": [
         "all"
     ],

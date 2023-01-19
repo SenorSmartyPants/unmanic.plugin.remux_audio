@@ -1,6 +1,4 @@
 
-Remux file if AC3 audio codec is present in file that is not MKV.
-
 ---
 
 #### <span style="color:blue">Write your own FFmpeg params</span>

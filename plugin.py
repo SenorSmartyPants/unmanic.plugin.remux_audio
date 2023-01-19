@@ -35,9 +35,9 @@ logger = logging.getLogger("Unmanic.Plugin.remux_audio")
 
 class Settings(PluginSettings):
     settings = {
-        "copy_video_to_global":  False,
-        "delete_singles":        False,
-        "title_regex":           '',
+        "audio_codecs":         '',
+        "input_file_ext":       '',
+        "output_ext":           'mkv',
         "advanced":              False,
         "main_options":          '',
         "advanced_options":      ''
@@ -47,17 +47,15 @@ class Settings(PluginSettings):
     def __init__(self, *args, **kwargs):
         super(Settings, self).__init__(*args, **kwargs)
         self.form_settings = {
-            "copy_video_to_global": {
-                "label": "Copy video stream title to global title"
+            "audio_codecs": {
+                "label": "Comma separated list of audio codecs"
             },
-            "delete_singles": {
-                "label": "Delete stream title if only one stream of that type"
+            "input_file_ext": {
+                "label": "Input file extentions to test"
             },
-            "title_regex": {
-                "label":      "Stream title regular expressions",
-                "input_type": "textarea"
+            "output_ext": {
+                "label": "Output container extension"
             },
-
             "advanced": {
                 "label": "Write your own FFmpeg params"
             },
@@ -87,19 +85,20 @@ class PluginStreamMapper(StreamMapper):
     def __init__(self):
         super(PluginStreamMapper, self).__init__(logger, ['audio'])
 
-        self.ac3found = False
+        self.codec_found = False
         self.settings = None
 
     def set_settings(self, settings):
         self.settings = settings
 
-    # test for AC3 audio stream
-    # if present call mapper.container_needs_remuxing('mkv') to check if this is already mkv
+    # test for audio codec
     def test_stream_needs_processing(self, stream_info: dict):
         logger.debug("File '{}' audio codec name = {}.".format(self.input_file, stream_info.get('codec_name').lower()))
-        if stream_info.get('codec_name').lower() == 'ac3':
-            logger.debug("audio codec matched!.")
-            self.ac3found = True
+        codecs = self.settings.get_setting('audio_codecs').split(',')
+        codec = stream_info.get('codec_name').lower()
+        if codec in codecs:
+            logger.debug("audio codec {} matched!".format(codec))
+            self.codec_found = True
             return True
 
         return False
@@ -121,14 +120,21 @@ def on_library_management_file_test(data):
     :return:
 
     """
+    # Get the path to the file
+    abspath = data.get('path')
+
     # Configure settings object (maintain compatibility with v1 plugins)
     if data.get('library_id'):
         settings = Settings(library_id=data.get('library_id'))
     else:
         settings = Settings()
 
-    # Get the path to the file
-    abspath = data.get('path')
+    # check that input file extension is in list to check
+    exts = settings.get_setting('input_file_ext').split(',')
+    split_file_in = os.path.splitext(abspath)
+    if split_file_in[1].lstrip('.') not in exts:
+        #don't do anything, input file extension does not match
+        return data
 
     # Get file probe
     probe = Probe(logger, allowed_mimetypes=['video'])
@@ -153,9 +159,9 @@ def on_library_management_file_test(data):
     # Set the input file
     mapper.set_input_file(abspath)
 
-    # check streams for ac3
+    # check streams for audio codecs
     mapper.streams_need_processing()
-    if mapper.ac3found and mapper.container_needs_remuxing('mkv'):
+    if mapper.codec_found and mapper.container_needs_remuxing(settings.get_setting('output_ext')):
         # Mark this file to be added to the pending tasks
         data['add_file_to_pending_tasks'] = True
         logger.debug("File '{}' should be added to task list. Probe found streams require processing.".format(abspath))
@@ -189,17 +195,24 @@ def on_worker_process(data):
     # Get the path to the file
     abspath = data.get('file_in')
 
-    # Get file probe
-    probe = Probe(logger, allowed_mimetypes=['video'])
-    if not probe.file(abspath):
-        # File probe failed, skip the rest of this test
-        return data
-
     # Configure settings object (maintain compatibility with v1 plugins)
     if data.get('library_id'):
         settings = Settings(library_id=data.get('library_id'))
     else:
         settings = Settings()
+
+    # check that input file extension is in list to check
+    exts = settings.get_setting('input_file_ext').split(',')
+    split_file_in = os.path.splitext(abspath)
+    if split_file_in[1].lstrip('.') not in exts:
+        #don't do anything, input file extension does not match
+        return data
+
+    # Get file probe
+    probe = Probe(logger, allowed_mimetypes=['video'])
+    if not probe.file(abspath):
+        # File probe failed, skip the rest of this test
+        return data
 
     # Get stream mapper
     mapper = PluginStreamMapper()
@@ -209,12 +222,12 @@ def on_worker_process(data):
     # Set the input file
     mapper.set_input_file(abspath)
 
-    # check streams for ac3
+    # check streams for audio codecs
     mapper.streams_need_processing()
-    if mapper.ac3found and mapper.container_needs_remuxing('mkv'):
+    if mapper.codec_found and mapper.container_needs_remuxing(settings.get_setting('output_ext')):
         # Set the output file
         split_file_out = os.path.splitext(data.get('file_out'))
-        new_file_out = "{}.{}".format(split_file_out[0], 'mkv')
+        new_file_out = "{}.{}".format(split_file_out[0], settings.get_setting('output_ext'))
         mapper.set_output_file(new_file_out)
         data['file_out'] = new_file_out
 
